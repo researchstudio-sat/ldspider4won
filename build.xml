@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="ldspider" basedir="." default="dist">
+
+<project name="ldspider" basedir="." default="dist" xmlns:artifact="antlib:org.apache.maven.artifact.ant">    <path id="maven-ant-tasks.classpath" path="antlib/maven-ant-tasks-2.1.3.jar" />
+    <typedef resource="org/apache/maven/artifact/ant/antlib.xml"
+             uri="antlib:org.apache.maven.artifact.ant"
+             classpathref="maven-ant-tasks.classpath" />
 <property name="name" value="ldspider"/>
 <property name="version" value="trunk"/>
 <property name="dist" value="dist"/>
@@ -8,7 +12,21 @@
       <include name="*.jar"/>
     </fileset>
   </path>
-		
+
+
+    <target name="maven-deps" depends="">
+    <artifact:dependencies filesetId="dependency.fileset" useScope="runtime">
+    <!-- Your dependency definitions go here -->
+        <artifact:dependency groupId="org.apache.solr" artifactId="solr-solrj" version="4.1.0" />
+    </artifact:dependencies>
+    <copy todir="./lib">
+     <fileset refid="dependency.fileset" />
+            <!-- This mapper strips off all leading directory information -->
+            <mapper type="flatten" />
+     </copy>
+
+    </target>
+
   <target name="prepare">
     <tstamp />
     <mkdir dir="bin"/>
@@ -27,14 +45,36 @@
     <!--<copy file="src/com/ontologycentral/ldspider/tld/tld.dat" tofile="bin/com/ontologycentral/ldspider/tld/tld.dat"> </copy> --> 
   	
     <jar jarfile="${dist}/${name}-${version}.jar" basedir="bin">
-      <zipfileset src="lib/commons-cli-1.2.jar"/>
-      <zipfileset src="lib/commons-logging-1.1.1.jar"/>
-      <zipfileset src="lib/httpclient-4.1.1.jar"/>
-      <zipfileset src="lib/httpcore-4.1.jar"/>
-      <zipfileset src="lib/nxparser-1.2.3.jar"/>
-	  <zipfileset src="lib/any23-core-0.6.1-jar-with-dependencies.jar"/>
+        <zipfileset src="lib/any23-core-0.6.1-jar-with-dependencies.jar"/>
+        <zipfileset src="lib/commons-cli-1.2.jar"/>
+        <zipfileset src="lib/commons-codec-1.2.jar" />
+        <zipfileset src="lib/commons-codec-1.4.jar" />
+        <zipfileset src="lib/commons-httpclient-3.1.jar" />
+        <zipfileset src="lib/commons-io-1.4.jar" />
+        <zipfileset src="lib/commons-io-2.1.jar" />
+        <zipfileset src="lib/commons-logging-1.0.4.jar" />
+        <zipfileset src="lib/commons-logging-1.1.1.jar"/>
+        <zipfileset src="lib/httpclient-4.1.1.jar"/>
+        <zipfileset src="lib/httpclient-4.1.3.jar" />
+        <zipfileset src="lib/httpcore-4.1.4.jar" />
+        <zipfileset src="lib/httpcore-4.1.jar"/>
+        <zipfileset src="lib/httpmime-4.0.1.jar" />
+        <zipfileset src="lib/httpmime-4.1.3.jar" />
+        <zipfileset src="lib/jcl-over-slf4j-1.6.1.jar" />
+        <zipfileset src="lib/nxparser-1.2.3.jar"/>
+        <zipfileset src="lib/siren-solr-all.jar" />
+        <zipfileset src="lib/siren-solr-all.jar" />
+        <zipfileset src="lib/slf4j-api-1.6.1.jar" />
+        <zipfileset src="lib/slf4j-api-1.6.4.jar" />
+        <zipfileset src="lib/solr-solrj-3.5.0.jar" />
+        <zipfileset src="lib/wstx-asl-3.2.7.jar" />
+        <zipfileset src="lib/zookeeper-3.4.5.jar" />
+	  <!--
+	    <zipfileset src="lib/*.jar"/>
+	    -->
+
       <manifest>
-	<attribute name="Main-Class" value="com.ontologycentral.ldspider.Main"/>
+	<attribute name="Main-Class" value="com.ontologycentral.ldspider.Main2"/>
       </manifest>
     </jar>
 
