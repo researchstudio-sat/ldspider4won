@@ -1,15 +1,14 @@
 package com.ontologycentral.ldspider.hooks.sink;
 
+import com.ontologycentral.ldspider.http.Headers;
+import org.semanticweb.yars.nx.Node;
+import org.semanticweb.yars.nx.parser.Callback;
+
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.logging.Logger;
-
-import org.semanticweb.yars.nx.Node;
-import org.semanticweb.yars.nx.parser.Callback;
-
-import com.ontologycentral.ldspider.http.Headers;
 
 /**
  * A Sink which writes the content to a triple store using SPARQL/Update.
@@ -30,6 +29,11 @@ public class SinkSparul implements Sink {
 	private boolean _includeProvenance;
 
 	private final String _graphUri;
+
+  //TODO: the virtuoso workaround is enabled by default,
+  //which most probably breaks writing to anything else! This should be enabled through a
+  //command line switch.
+  private boolean isVirtuoso_06_01_3127_workaroundActive = true;
 
 	/**
 	 * Creates a new SPARQL/Update Sink.
@@ -139,7 +143,15 @@ public class SinkSparul implements Sink {
 			if(newGraph) {
 				_writer.write("CREATE+SILENT+GRAPH+%3C" + graphUri + "%3E+");
 			}
-			_writer.write("INSERT+DATA+INTO+%3C" + graphUri + "%3E+%7B");
+      if (isVirtuoso_06_01_3127_workaroundActive){
+        //workaround for Virtuoso Version: 06.01.3127, Build: Feb 15 2012
+        //known by the messages 'Virtuoso 37000 Error SP031: SPARQL compiler: Blank node [...] is not allowed in a constant clauseSPARQL query
+        //see https://groups.google.com/forum/?fromgroups=#!searchin/ldspider/virtuoso/ldspider/9i9yaY0XHPo/GXmVe_3jCG0J
+        //see http://www.mail-archive.com/virtuoso-users@lists.sourceforge.net/msg05137.html
+        _writer.write("INSERT+INTO+GRAPH+%3C" + graphUri + "%3E+%7B");
+      } else {
+			  _writer.write("INSERT+DATA+INTO+%3C" + graphUri + "%3E+%7B");
+      }
 
 			//Write provenance data
 			if(_includeProvenance) {
