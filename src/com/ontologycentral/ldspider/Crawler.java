@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import com.ontologycentral.ldspider.persist.CrawlStateManager;
 import org.semanticweb.yars.nx.parser.Callback;
 import org.semanticweb.yars.tld.TldManager;
 
@@ -40,9 +41,10 @@ public class Crawler {
 	Sink _output;
 	LinkFilter _links;
 	ErrorHandler _eh;
-	FetchFilter _ff, _blacklist;
+	FetchFilter _ff, _blacklist, _expiredOrNew;
 	ConnectionManager _cm;
-	
+    CrawlStateManager _crawlStateManager;
+
 	Class<? extends Redirects> _redirsClass;
 	
 	Robots _robots;
@@ -282,7 +284,7 @@ public class Crawler {
 			}
 
 			for (int j = 0; j < _threads; j++) {
-				LookupThread lt = new LookupThread(_cm, _queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist, j);
+				LookupThread lt = new LookupThread(_cm, _queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist,_expiredOrNew,_crawlStateManager, j);
 				ts.add(lt); //new Thread(lt,"LookupThread-"+j));		
 			}
 
@@ -361,7 +363,7 @@ public class Crawler {
 			List<Thread> ts = new ArrayList<Thread>();
 
 			for (int j = 0; j < _threads; j++) {
-				LookupThread lt = new LookupThread(_cm, _queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist, j);
+				LookupThread lt = new LookupThread(_cm, _queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist,_expiredOrNew,_crawlStateManager, j);
 				ts.add(lt); //new Thread(lt,"LookupThread-"+j));		
 			}
 
@@ -422,7 +424,7 @@ public class Crawler {
 			List<Thread> ts = new ArrayList<Thread>();
 
 			for (int j = 0; j < _threads; j++) {
-				LookupThread lt = new LookupThread(_cm, _queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist, j);
+				LookupThread lt = new LookupThread(_cm, _queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist, _expiredOrNew, _crawlStateManager, j);
 				ts.add(lt); //new Thread(lt,"LookupThread-"+j));		
 			}
 
@@ -460,7 +462,7 @@ public class Crawler {
 		List<Thread> ts = new ArrayList<Thread>();
 
 		for (int j = 0; j < _threads; j++) {
-			LookupThread lt = new LookupThread(_cm, queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist, j);
+			LookupThread lt = new LookupThread(_cm, queue, _contentHandler, _output, _links, _robots, _eh, _ff, _blacklist,_expiredOrNew,_crawlStateManager, j);
 			ts.add(lt); //new Thread(lt,"LookupThread-"+j));		
 		}
 
@@ -504,8 +506,15 @@ public class Crawler {
 	public void setRedirsClass(Class<? extends Redirects> _redirsClass) {
 		this._redirsClass = _redirsClass;
 	}
+    public void setCrawlStateManager(CrawlStateManager crawlStateManager){
+        this._crawlStateManager = crawlStateManager;
+    }
+    public void setExpiredOrNewFilter(FetchFilter expiredOrNewFilter) {
+        this._expiredOrNew = expiredOrNewFilter;
+    }
 	public void close() {
 		_cm.shutdown();
 		_eh.close();
+        if (_crawlStateManager != null) _crawlStateManager.shutdown();
 	}
 }

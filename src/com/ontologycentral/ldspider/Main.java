@@ -1,5 +1,7 @@
 package com.ontologycentral.ldspider;
 
+import com.ontologycentral.ldspider.hooks.fetch.AllowOnlyNewOrExpiredFetchFilter;
+import com.ontologycentral.ldspider.persist.CrawlStateManagerImpl;
 import ie.deri.urq.lidaq.source.CallbackNQuadTripleHandler;
 
 import java.io.BufferedOutputStream;
@@ -174,6 +176,13 @@ public class Main {
 		linkFilterOptions.addOption(follow);
 
 		options.addOptionGroup(linkFilterOptions);
+
+        //Persist crawl state
+        Option persistDir = OptionBuilder.withArgName("persist-dir")
+                .hasArgs(1)
+                .withDescription("directory for storing data between crawls (to avoid unnecessary re-downloading of data)")
+                .create("p");
+        options.addOption(persistDir);
 
 		//Redirects
 		Option redirs = OptionBuilder.withArgName("filename[.gz]")
@@ -632,6 +641,16 @@ public class Main {
 			c.setRedirsClass(DummyRedirects.class);
 		else
 			c.setRedirsClass(HashTableRedirects.class);
+
+        //use the persisted crawl state feature?
+        if (cmd.hasOption("p")){
+            String dataDir = cmd.getOptionValue("p");
+            CrawlStateManagerImpl crawlStateManager = new CrawlStateManagerImpl(new File(dataDir));
+            FetchFilter expiredOrNewFilter = new AllowOnlyNewOrExpiredFetchFilter();
+            ((AllowOnlyNewOrExpiredFetchFilter)expiredOrNewFilter).setCrawlStateManager(crawlStateManager);
+            c.setCrawlStateManager(crawlStateManager);
+            c.setExpiredOrNewFilter(expiredOrNewFilter);
+        }
 
 		if (cmd.hasOption("b")) {
 			String[] vals = cmd.getOptionValues("b");
