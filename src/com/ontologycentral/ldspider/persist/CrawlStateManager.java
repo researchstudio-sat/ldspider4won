@@ -11,23 +11,34 @@ import java.util.Date;
  * To change this template use File | Settings | File Templates.
  */
 public interface CrawlStateManager {
+
     /**
      * Adds the resource to the persisted crawl state with the specified expiry date.
      * @param resourceUri
      * @param expires the expiry date or null if the resource does not expire.
      */
-    public void resourceSeen(URI resourceUri, Date expires);
+    public void registerExpiryDate(URI resourceUri, Date expires);
+
+    /**
+     * Adds the resource to the persisted crawl state, stating that it will never expire.
+     * @param resourceUri
+     */
+    public void registerUriNeverExpires(URI resourceUri);
 
     /**
      * Checks the crawl persisted state to determine if the resource should be downloaded.
      * If the resource is unknown or the expiry date is in the past, true is returned.
      * @param resourceUri
      */
-    public void isDownloadRequired(URI resourceUri);
+    public boolean isDownloadRequired(URI resourceUri);
 
     /**
      * Releases all resources.
      */
     public void shutdown();
 
+    /**
+     * Initializes the crawl state manager.
+     */
+    void initialize();
 }
