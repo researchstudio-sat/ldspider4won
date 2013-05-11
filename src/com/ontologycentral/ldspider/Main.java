@@ -177,12 +177,12 @@ public class Main {
 
 		options.addOptionGroup(linkFilterOptions);
 
-        //Persist crawl state
-        Option persistDir = OptionBuilder.withArgName("persist-dir")
-                .hasArgs(1)
-                .withDescription("directory for storing data between crawls (to avoid unnecessary re-downloading of data)")
-                .create("p");
-        options.addOption(persistDir);
+    //Persist crawl state
+    Option persistDir = OptionBuilder.withArgName("persist-dir")
+            .hasArgs(1)
+            .withDescription("directory for storing data between crawls (to avoid unnecessary re-downloading of data)")
+            .create("p");
+    options.addOption(persistDir);
 
 		//Redirects
 		Option redirs = OptionBuilder.withArgName("filename[.gz]")
@@ -642,15 +642,23 @@ public class Main {
 		else
 			c.setRedirsClass(HashTableRedirects.class);
 
-        //use the persisted crawl state feature?
-        if (cmd.hasOption("p")){
-            String dataDir = cmd.getOptionValue("p");
-            CrawlStateManagerImpl crawlStateManager = new CrawlStateManagerImpl(new File(dataDir));
-            FetchFilter expiredOrNewFilter = new AllowOnlyNewOrExpiredFetchFilter();
-            ((AllowOnlyNewOrExpiredFetchFilter)expiredOrNewFilter).setCrawlStateManager(crawlStateManager);
-            c.setCrawlStateManager(crawlStateManager);
-            c.setExpiredOrNewFilter(expiredOrNewFilter);
+    //use the persisted crawl state feature?
+    if (cmd.hasOption("p")){
+        String dataDir = cmd.getOptionValue("p");
+        File dataDirFile = new File(dataDir);
+        _log.info("using directory '" + dataDirFile.getAbsolutePath() + "' to persist crawl state");
+        CrawlStateManagerImpl crawlStateManager = new CrawlStateManagerImpl(dataDirFile);
+        crawlStateManager.initialize();
+        FetchFilter expiredOrNewFilter = new AllowOnlyNewOrExpiredFetchFilter();
+        ((AllowOnlyNewOrExpiredFetchFilter)expiredOrNewFilter).setCrawlStateManager(crawlStateManager);
+        c.setCrawlStateManager(crawlStateManager);
+        c.setExpiredOrNewFilter(expiredOrNewFilter);
+        //add all expired URIs to the frontier
+        Iterator<URI> expiredURIs = crawlStateManager.getExpiredUriIterator();
+        while(expiredURIs.hasNext()){
+          frontier.add(expiredURIs.next());
         }
+    }
 
 		if (cmd.hasOption("b")) {
 			String[] vals = cmd.getOptionValues("b");

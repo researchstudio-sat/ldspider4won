@@ -2,10 +2,9 @@ package com.ontologycentral.ldspider.persist;
 
 import java.io.*;
 import java.net.URI;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Map;
-import java.util.TreeMap;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * Vanilla implementation of the CrawlStateManager interface using a TreeMap that is serialized to file in a
@@ -13,6 +12,10 @@ import java.util.TreeMap;
  */
 public class CrawlStateManagerImpl implements CrawlStateManager {
     public static final String EXPIRY_DATE_FILE = "expirydates";
+
+
+  Logger _log = Logger.getLogger(this.getClass().getSimpleName());
+
 
     /**
      * Structure holding the expiry date for each URI.
@@ -27,6 +30,8 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
 
     private Date neverExpiresDate = null;
 
+    private static final String LOG_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss";
+
 
     /**
      * Creates a new instance which uses the specified folder for storing all state data.
@@ -39,13 +44,15 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
         Calendar cal = Calendar.getInstance();
         cal.setTime(new Date());
         cal.set(Calendar.YEAR, cal.get(Calendar.YEAR) + 1000);
+        this.neverExpiresDate = cal.getTime();
     }
 
     @Override
-    public void registerExpiryDate(URI resourceUri, Date expires) {
+    public void registerExpiryDate(URI resourceUri, Date expiryDate) {
         synchronized (this){
             dieIfNotInitialized();
-            this.uriExpiryDateMap.put(resourceUri, expires);
+            _log.info("registering expiry date '" + (expiryDate==null? "[null]":new SimpleDateFormat(LOG_DATE_FORMAT).format(expiryDate)) + "' for URI '" + resourceUri +"'" );
+            this.uriExpiryDateMap.put(resourceUri, expiryDate);
         }
     }
 
@@ -53,6 +60,7 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
     public void registerUriNeverExpires(URI resourceUri) {
         synchronized (this) {
             dieIfNotInitialized();
+            _log.info("registering expiry date '" + new SimpleDateFormat(LOG_DATE_FORMAT).format(neverExpiresDate) +"' (i.e. never expires) for URI '" + resourceUri +"'" );
             this.uriExpiryDateMap.put(resourceUri, neverExpiresDate);
         }
     }
@@ -61,8 +69,50 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
     public boolean isDownloadRequired(URI resourceUri) {
         dieIfNotInitialized();
         Date expiryDate = this.uriExpiryDateMap.get(resourceUri);
-        if (expiryDate == null) return true;
-        return expiryDate.before(new Date());    //let's assume creating a new date each time does not eat too many resources
+        _log.info("checking expiry date '" + (expiryDate==null? "[null]":new SimpleDateFormat(LOG_DATE_FORMAT).format(expiryDate)) + "' for URI '" + resourceUri +"'" );
+        if (expiryDate == null) return true;  // we haven't seen this URI yet -> download.
+        return expiryDate.before(new Date());    //URI is expired? If yes, download. (let's assume creating a new date each time does not eat too many resources)
+    }
+
+    @Override
+    public Iterator<URI> getExpiredUriIterator()
+    {
+      dieIfNotInitialized();
+      final Date now = new Date();
+      final Iterator<Map.Entry<URI,Date>> baseIterator = uriExpiryDateMap.entrySet().iterator();
+      return new Iterator<URI>()
+      {
+        private URI next = getNextExpiredURI();
+
+        private URI getNextExpiredURI()
+        {
+          while(baseIterator.hasNext()){
+            Map.Entry<URI,Date> candidate = baseIterator.next();
+            if (candidate.getValue().before(now)) return candidate.getKey();
+          }
+          return null;
+        }
+
+        @Override
+        public boolean hasNext()
+        {
+          return next != null;
+        }
+
+        @Override
+        public URI next()
+        {
+          URI toReturn = next;
+          next = getNextExpiredURI();
+          return toReturn;
+        }
+
+        @Override
+        public void remove()
+        {
+          throw new UnsupportedOperationException("not implemented");
+        }
+      };
     }
 
     @Override
@@ -82,9 +132,11 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
     public void initialize(){
         try {
             synchronized (this) {
+                _log.info("initializing CrawlStateManagerImpl");
                 if (this.initialized) throw new IllegalStateException("Cannot initialize: already initialized.");
                 initializeStateDirectory(this.dataFolder);
                 this.initialized = true;
+                _log.info("done initializing CrawlStateManagerImpl");
             }
         } catch (Exception e) {
             throw new RuntimeException("Error occurred during initialization of the crawl state manager", e);
@@ -94,12 +146,15 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
 
 
     private void saveStateToDirectory(File folder) throws IOException {
+        _log.info("saving crawl state to folder '" + folder.getAbsolutePath() +"'");
         checkFolderPermissions(folder);
         File expiryDateFile = new File(folder, EXPIRY_DATE_FILE);
         writeMapToFile(expiryDateFile, this.uriExpiryDateMap);
+        _log.info("finished saving crawl state");
     }
 
     private void initializeStateDirectory(File folder) {
+        _log.info("initializing crawl state folder: '" + folder.getAbsolutePath() +"'");
         try {
             createFolderIfNotExists(folder);
             checkFolderPermissions(folder);
@@ -115,9 +170,11 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
         } catch (Exception e) {
             throw new RuntimeException("Could not initialize state with directory: '" + folder + "'", e);
         }
+        _log.info("finished initializing crawl state folder");
     }
 
     private TreeMap<URI, Date> readMapFromFile(File expiryDateFile) throws IOException, ClassNotFoundException {
+        _log.info("reading expiry dates from file '" + expiryDateFile.getAbsolutePath()+"'");
         ObjectInputStream ois = null;
         FileInputStream fis = null;
         TreeMap<URI,Date> theMap = null;
@@ -137,10 +194,12 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
                 throw new RuntimeException("couldn't close object input stream on '" + expiryDateFile +"'",e);
             }
         }
+        _log.info("finished reading expiry dates");
         return theMap;
     }
     
     private void writeMapToFile(File expiryDateFile, Map expiryDateMap) throws IOException {
+        _log.info("writing expiry dates to file '" + expiryDateFile.getAbsolutePath()+"'");
         ObjectOutputStream oos = null;
         FileOutputStream fos = null;
         try {
@@ -158,7 +217,8 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
             } catch ( Exception e) {
                 throw new RuntimeException("couldn't close object output stream on '" + expiryDateFile +"'",e);
             }
-        }        
+        }
+        _log.info("done writing expiry dates");
     }
 
     private void dieIfNotInitialized(){

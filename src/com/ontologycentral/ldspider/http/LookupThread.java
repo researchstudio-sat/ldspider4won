@@ -1,14 +1,14 @@
 package com.ontologycentral.ldspider.http;
 
-import java.io.InputStream;
-import java.net.URI;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
-
+import com.ontologycentral.ldspider.CrawlerConstants;
+import com.ontologycentral.ldspider.hooks.content.ContentHandler;
+import com.ontologycentral.ldspider.hooks.error.ErrorHandler;
+import com.ontologycentral.ldspider.hooks.fetch.FetchFilter;
+import com.ontologycentral.ldspider.hooks.sink.Provenance;
+import com.ontologycentral.ldspider.hooks.sink.Sink;
+import com.ontologycentral.ldspider.http.robot.Robots;
 import com.ontologycentral.ldspider.persist.CrawlStateManager;
+import com.ontologycentral.ldspider.queue.SpiderQueue;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -17,14 +17,13 @@ import org.apache.http.client.methods.HttpGet;
 import org.semanticweb.yars.nx.parser.Callback;
 import org.semanticweb.yars.util.Callbacks;
 
-import com.ontologycentral.ldspider.CrawlerConstants;
-import com.ontologycentral.ldspider.hooks.content.ContentHandler;
-import com.ontologycentral.ldspider.hooks.error.ErrorHandler;
-import com.ontologycentral.ldspider.hooks.fetch.FetchFilter;
-import com.ontologycentral.ldspider.hooks.sink.Provenance;
-import com.ontologycentral.ldspider.hooks.sink.Sink;
-import com.ontologycentral.ldspider.http.robot.Robots;
-import com.ontologycentral.ldspider.queue.SpiderQueue;
+import java.io.InputStream;
+import java.net.URI;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 
 public class LookupThread extends Thread {
 	Logger _log = Logger.getLogger(this.getClass().getSimpleName());
@@ -35,7 +34,7 @@ public class LookupThread extends Thread {
 	Callback _links;
 	FetchFilter _ff, _blacklist, _expiredOrNew;
 
-    CrawlStateManager _crawlStateManager = null;
+  CrawlStateManager _crawlStateManager = null;
 	StatementCountingCallback _stmtCountingCallback;
 	
 	Robots _robots;
@@ -68,7 +67,7 @@ public class LookupThread extends Thread {
 		_no = no;
 		
 		_stmtCountingCallback = new StatementCountingCallback();
-        _crawlStateManager = crawlStateManager;
+    _crawlStateManager = crawlStateManager;
 		
 		setName("LT-"+_no);
 	}
@@ -116,11 +115,10 @@ public class LookupThread extends Thread {
 //			}
 			
 			Header[] headers = null;
-
-            if (_expiredOrNew != null && !_expiredOrNew.fetchOk(lu,0,null)) {
-                _log.info("prevented re-downloading before expiry date of " + lu);
-                _eh.handleStatus(lu, CrawlerConstants.SKIP_SUFFIX, null, 0, -1); //TODO: do I need my own constant here?
-            } else if (!_blacklist.fetchOk(lu, 0, null)) {
+      if (_expiredOrNew != null && !_expiredOrNew.fetchOk(lu,0,null)) {
+        _log.info("prevented re-downloading before expiry date of " + lu);
+        _eh.handleStatus(lu, CrawlerConstants.SKIP_SUFFIX, null, 0, -1); //TODO: do I need my own constant here?
+      } else if (!_blacklist.fetchOk(lu, 0, null)) {
 				_log.info("access denied per blacklist for " + lu);
 				_eh.handleStatus(lu, CrawlerConstants.SKIP_SUFFIX, null, 0, -1);
 			} else if (!_robots.accessOk(lu)) {
@@ -206,33 +204,34 @@ public class LookupThread extends Thread {
 						headers = hres.getAllHeaders();
 					}
 
-                    // if the crawlStateManager is present, parse the 'Expires' header
-                    // and store the expiry information
-                    if (_crawlStateManager != null) {
-                        //check expires header and update the crawl state
-                        Header expiresHeader = hres.getFirstHeader("Expires");
-                        if (expiresHeader == null) {
-                            //missing expires header: assume resource never expires
-                            this._crawlStateManager.registerUriNeverExpires(lu);
-                            _log.fine("uri " + lu + " lacks 'Expires' header, will be treated as non-expiring");
-                        } else {
-                            Date expiryDate = null;
-                            String expiresString = expiresHeader.getValue();
-                            try {
-                                expiryDate = rfc1123DateFormatter.parse(expiresString);
-                                _log.fine("uri " + lu + " expires on " + rfc1123DateFormatter.format(expiryDate));
-                            } catch (ParseException ex) {
-                                //swallow this exception:
-                                //non-parseable date to be handled as 'never expires'
-                                _log.fine("uri " + lu + " has unparseable 'Expires' header '" + expiresString +"', will be treated as non-expiring");
-                            }
-                            if (expiryDate == null){
-                                this._crawlStateManager.registerUriNeverExpires(lu);
-                            } else {
-                                this._crawlStateManager.registerExpiryDate(lu, expiryDate);
-                            }
-                        }
-                    }
+          // if the crawlStateManager is present, parse the 'Expires' header
+          // and store the expiry information
+          if (_crawlStateManager != null) {
+              _log.fine("registering expiry date for uri " + lu);
+              //check expires header and update the crawl state
+              Header expiresHeader = hres.getFirstHeader("Expires");
+              if (expiresHeader == null) {
+                  //missing expires header: assume resource never expires
+                  this._crawlStateManager.registerUriNeverExpires(lu);
+                  _log.fine("uri " + lu + " lacks 'Expires' header, will be treated as non-expiring");
+              } else {
+                  Date expiryDate = null;
+                  String expiresString = expiresHeader.getValue();
+                  try {
+                      expiryDate = rfc1123DateFormatter.parse(expiresString);
+                      _log.fine("uri " + lu + " expires on " + rfc1123DateFormatter.format(expiryDate));
+                  } catch (ParseException ex) {
+                      //swallow this exception:
+                      //non-parseable date to be handled as 'never expires'
+                      _log.fine("uri " + lu + " has unparseable 'Expires' header '" + expiresString +"', will be treated as non-expiring");
+                  }
+                  if (expiryDate == null){
+                      this._crawlStateManager.registerUriNeverExpires(lu);
+                  } else {
+                      this._crawlStateManager.registerExpiryDate(lu, expiryDate);
+                  }
+              }
+          }
 
 					if (hen != null) {
 						bytes = hen.getContentLength();

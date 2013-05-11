@@ -23,6 +23,8 @@ import com.ontologycentral.ldspider.hooks.error.ErrorHandler;
 import com.ontologycentral.ldspider.hooks.error.ErrorHandlerLogger;
 import com.ontologycentral.ldspider.hooks.error.ErrorHandlerRounds;
 import com.ontologycentral.ldspider.hooks.error.ObjectThrowable;
+import com.ontologycentral.ldspider.hooks.fetch.AllowOnlyNewOrExpiredFetchFilter;
+import com.ontologycentral.ldspider.hooks.fetch.FetchFilter;
 import com.ontologycentral.ldspider.hooks.fetch.FetchFilterSuffix;
 import com.ontologycentral.ldspider.hooks.links.*;
 import com.ontologycentral.ldspider.hooks.sink.Sink;
@@ -30,6 +32,7 @@ import com.ontologycentral.ldspider.hooks.sink.SinkCallback;
 import com.ontologycentral.ldspider.hooks.sink.SinkSparul;
 import com.ontologycentral.ldspider.hooks.sink.SirenSink;
 import com.ontologycentral.ldspider.http.Headers;
+import com.ontologycentral.ldspider.persist.CrawlStateManagerImpl;
 import com.ontologycentral.ldspider.queue.DummyRedirects;
 import com.ontologycentral.ldspider.queue.HashTableRedirects;
 import ie.deri.urq.lidaq.source.CallbackNQuadTripleHandler;
@@ -150,6 +153,13 @@ public class Main2 {
 		linkFilterOptions.addOption(follow);
 
 		options.addOptionGroup(linkFilterOptions);
+
+    //Persist crawl state
+    Option persistDir = OptionBuilder.withArgName("persist-dir")
+        .hasArgs(1)
+        .withDescription("directory for storing data between crawls (to avoid unnecessary re-downloading of data)")
+        .create("p");
+    options.addOption(persistDir);
 
 		//Redirects
 		Option redirs = OptionBuilder.withArgName("filename[.gz]")
@@ -620,7 +630,30 @@ public class Main2 {
 		else
 			c.setRedirsClass(HashTableRedirects.class);
 
-		if (cmd.hasOption("b")) {
+    //use the persisted crawl state feature?
+    if (cmd.hasOption("p")){
+      //read options and configure crawl state stuff
+      String dataDir = cmd.getOptionValue("p");
+      File dataDirFile = new File(dataDir);
+      _log.info("using directory '" + dataDirFile.getAbsolutePath() + "' to persist crawl state");
+      CrawlStateManagerImpl crawlStateManager = new CrawlStateManagerImpl(dataDirFile);
+      crawlStateManager.initialize();
+      FetchFilter expiredOrNewFilter = new AllowOnlyNewOrExpiredFetchFilter();
+      ((AllowOnlyNewOrExpiredFetchFilter)expiredOrNewFilter).setCrawlStateManager(crawlStateManager);
+      c.setCrawlStateManager(crawlStateManager);
+      c.setExpiredOrNewFilter(expiredOrNewFilter);
+      //add all expired URIs to the frontier
+      Iterator<URI> expiredURIs = crawlStateManager.getExpiredUriIterator();
+      int expiredUriCnt = 0;
+      while(expiredURIs.hasNext()){
+        frontier.add(expiredURIs.next());
+        expiredUriCnt++;
+      }
+      _log.info("added " + expiredUriCnt + " expired URIs to the frontier");
+    }
+
+
+    if (cmd.hasOption("b")) {
 			String[] vals = cmd.getOptionValues("b");
 
 			int depth = Integer.parseInt(vals[0]);
@@ -691,7 +724,6 @@ public class Main2 {
 
 	/**
 	 *
-	 * @param q - queue
 	 * @param seedList
 	 * @throws java.io.FileNotFoundException - should never happen since the check was done in method before
 	 */

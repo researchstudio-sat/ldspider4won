@@ -2,6 +2,7 @@ package com.ontologycentral.ldspider.persist;
 
 import java.net.URI;
 import java.util.Date;
+import java.util.Iterator;
 
 /**
  * Created with IntelliJ IDEA.
@@ -31,6 +32,12 @@ public interface CrawlStateManager {
      * @param resourceUri
      */
     public boolean isDownloadRequired(URI resourceUri);
+
+    /**
+     * Returns an iterator over all known expired URIs.
+     * @return
+     */
+    public Iterator<URI> getExpiredUriIterator();
 
     /**
      * Releases all resources.
