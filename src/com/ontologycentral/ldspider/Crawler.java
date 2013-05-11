@@ -1,16 +1,5 @@
 package com.ontologycentral.ldspider;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.logging.Logger;
-
-import com.ontologycentral.ldspider.persist.CrawlStateManager;
-import org.semanticweb.yars.nx.parser.Callback;
-import org.semanticweb.yars.tld.TldManager;
-
 import com.ontologycentral.ldspider.frontier.Frontier;
 import com.ontologycentral.ldspider.hooks.content.ContentHandler;
 import com.ontologycentral.ldspider.hooks.content.ContentHandlerRdfXml;
@@ -27,12 +16,17 @@ import com.ontologycentral.ldspider.hooks.sink.SpyingSinkCallback;
 import com.ontologycentral.ldspider.http.ConnectionManager;
 import com.ontologycentral.ldspider.http.LookupThread;
 import com.ontologycentral.ldspider.http.robot.Robots;
-import com.ontologycentral.ldspider.queue.BreadthFirstQueue;
-import com.ontologycentral.ldspider.queue.DiskBreadthFirstQueue;
-import com.ontologycentral.ldspider.queue.DummyRedirects;
-import com.ontologycentral.ldspider.queue.LoadBalancingQueue;
-import com.ontologycentral.ldspider.queue.Redirects;
-import com.ontologycentral.ldspider.queue.SpiderQueue;
+import com.ontologycentral.ldspider.persist.CrawlStateManager;
+import com.ontologycentral.ldspider.queue.*;
+import org.semanticweb.yars.nx.parser.Callback;
+import org.semanticweb.yars.tld.TldManager;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Logger;
 
 public class Crawler {
 	Logger _log = Logger.getLogger(this.getClass().getName());
@@ -43,7 +37,7 @@ public class Crawler {
 	ErrorHandler _eh;
 	FetchFilter _ff, _blacklist, _expiredOrNew;
 	ConnectionManager _cm;
-    CrawlStateManager _crawlStateManager;
+  CrawlStateManager _crawlStateManager;
 
 	Class<? extends Redirects> _redirsClass;
 	
@@ -515,6 +509,7 @@ public class Crawler {
 	public void close() {
 		_cm.shutdown();
 		_eh.close();
-        if (_crawlStateManager != null) _crawlStateManager.shutdown();
+    _output.shutdown();
+    if (_crawlStateManager != null) _crawlStateManager.shutdown();
 	}
 }

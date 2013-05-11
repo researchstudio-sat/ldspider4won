@@ -7,7 +7,7 @@ import org.semanticweb.yars.util.Callbacks;
 /**
  * A wrapping Sink that can report by whom the last statement was.
  * 
- * @author Tobias Käfer
+ * @author Tobias Kï¿½fer
  * 
  */
 public class SpyingSinkCallback implements Sink, LastReporter {
@@ -37,6 +37,12 @@ public class SpyingSinkCallback implements Sink, LastReporter {
 		_bareCbs[0] = _sink.newDataset(provenance);
 		return _cbs;
 	}
+
+  @Override
+  public void shutdown()
+  {
+    ;
+  }
 
 	public Resource whoWasLast() {
 		return _cb.whoWasLast();

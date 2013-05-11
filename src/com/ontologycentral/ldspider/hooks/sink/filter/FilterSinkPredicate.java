@@ -1,14 +1,13 @@
 package com.ontologycentral.ldspider.hooks.sink.filter;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.logging.Logger;
-
+import com.ontologycentral.ldspider.hooks.sink.Provenance;
+import com.ontologycentral.ldspider.hooks.sink.Sink;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.parser.Callback;
 
-import com.ontologycentral.ldspider.hooks.sink.Provenance;
-import com.ontologycentral.ldspider.hooks.sink.Sink;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A Sink which filters statements based on a list of allowed predicates.
@@ -31,7 +30,13 @@ public class FilterSinkPredicate implements Sink {
 		return new FilterCallback(_sink.newDataset(provenance));
 	}
 
-	private class FilterCallback implements Callback {
+  @Override
+  public void shutdown()
+  {
+    ;
+  }
+
+  private class FilterCallback implements Callback {
 
 		private final Callback _callback;
 

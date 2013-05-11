@@ -28,13 +28,6 @@ import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- * Created with IntelliJ IDEA.
- * User: jkornacker
- * Date: 28.02.13
- * Time: 16:27
- * To change this template use File | Settings | File Templates.
- */
 public class SirenSink implements Sink {
 
     private final Logger _log = Logger.getLogger(this.getClass().getSimpleName());
@@ -67,7 +60,20 @@ public class SirenSink implements Sink {
       }
     }
 
-    public Callback newDataset(Provenance provenance) {
+  @Override
+  public void shutdown()
+  {
+    if (this.solrServer != null){
+      try {
+        _log.info("shutting down siren sink, committing siren/solr data");
+        this.solrServer.commit();
+      } catch (Exception e) {
+        _log.log(Level.WARNING, "error committing siren/solr data", e);
+      }
+    }
+  }
+
+  public Callback newDataset(Provenance provenance) {
         return new SirenCallback(provenance, solrServer);
     }
 
@@ -122,13 +128,15 @@ public class SirenSink implements Sink {
 
                 //reject anything without the triples
                 if (nTriplesString.length()== 0) return;
-                _log.info("writing these triples: \n" + nTriplesString);
+                _log.fine("writing these triples: \n" + nTriplesString);
                 this.document.setField(FIELD_NTRIPLE, nTriplesString);
                 final UpdateRequest request = new UpdateRequest();
                 request.add(this.document);
                 request.process(this.solrServer);
-                _log.info("committing data to siren..");
-                this.solrServer.commit();
+
+                //TODO: find out how to fix this
+                //Thread.sleep(1500); //the timing code in LoadBalancingQueue makes this necessary for hosts without tld in the LAN.
+                //with breadth-first ("-b") it seems to work, though.
 
               /*
                 SolrQuery params = new SolrQuery();
@@ -156,7 +164,7 @@ public class SirenSink implements Sink {
             //_log.info("collecting statements for siren/solr, doc url is " + this.provenance.getUri().toString() + ", data: " + Arrays.toString(nx));
             try {
                 writeStatement(nx);
-            } catch (IOException e){
+            } catch (Exception e){
                 _log.log(Level.WARNING,"error processing triple '" + Arrays.toString(nx) +"'.", e);
             }
         }
@@ -170,7 +178,7 @@ public class SirenSink implements Sink {
          */
         private void writeStatement(Node[] nodes) throws IOException {
             //Preconditions
-            if(this.nTriplesBuilder == null) throw new IllegalStateException("Must open document before writing statements");
+            if(this.nTriplesBuilder == null) startDocument(); //there seems to be some kind of race condition that causes writeStatement to be called before startDocument sometimes
             if(nodes == null) throw new NullPointerException("nodes must not be null");
             if(nodes.length < 3) throw new IllegalArgumentException("A statement must consist of at least 3 nodes");
             //hack:

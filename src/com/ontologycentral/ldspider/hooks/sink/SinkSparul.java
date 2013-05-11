@@ -66,7 +66,13 @@ public class SinkSparul implements Sink {
 		return new CallbackSparul(provenance);
 	}
 
-	/**
+  @Override
+  public void shutdown()
+  {
+    ;
+  }
+
+  /**
 	 * Callback which is used to write a graph to the store.
 	 */
 	private class CallbackSparul implements Callback {

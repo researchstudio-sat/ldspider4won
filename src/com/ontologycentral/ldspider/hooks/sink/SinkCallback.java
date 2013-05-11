@@ -51,4 +51,10 @@ public class SinkCallback implements Sink {
 
 		return _callback;
 	}
+
+  @Override
+  public void shutdown()
+  {
+    ;
+  }
 }

@@ -16,4 +16,9 @@ public interface Sink {
 	 * @return A callback used to write statements into the datset
 	 */
 	Callback newDataset(Provenance provenance);
+
+  /**
+   * Frees all resources.
+   */
+  public void shutdown();
 }
