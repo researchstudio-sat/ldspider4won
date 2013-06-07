@@ -38,6 +38,8 @@ public class SirenSink implements Sink {
     private static final String FIELD_URL = "url";
     private static final String FIELD_NTRIPLE = "ntriple";
 
+    private boolean isShutdown = false; //trying to prevent multiple commits
+
 
     //hack: thanks to httprange-14, we have to determine the resource url by
     // searching for triples X won:hasConnections Y. So we have to define this constant here
@@ -63,10 +65,11 @@ public class SirenSink implements Sink {
   @Override
   public void shutdown()
   {
-    if (this.solrServer != null){
+    if (!this.isShutdown && this.solrServer != null){
       try {
         _log.info("shutting down siren sink, committing siren/solr data");
         this.solrServer.commit();
+        this.isShutdown = true;
       } catch (Exception e) {
         _log.log(Level.WARNING, "error committing siren/solr data", e);
       }
