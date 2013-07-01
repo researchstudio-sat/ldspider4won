@@ -22,7 +22,6 @@ import org.apache.solr.common.SolrInputDocument;
 import org.semanticweb.yars.nx.Node;
 import org.semanticweb.yars.nx.parser.Callback;
 
-import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.Arrays;
 import java.util.logging.Level;
@@ -42,6 +41,7 @@ public class SirenSink implements Sink
   private static final String FIELD_TITLE = "title";
   private static final String FIELD_DESCRIPTION = "description";
   private static final String FIELD_BASIC_NEED_TYPE = "basicNeedType";
+  private static final String FIELD_LOCATION = "location";
 
 
   //hack: thanks to httprange-14, we have to determine the resource url by
@@ -50,19 +50,20 @@ public class SirenSink implements Sink
   private static final String WON_PREFIX = "http://purl.org/webofneeds/model#";
   private static final String DC_PREFIX = "http://purl.org/dc/elements/1.1/";
   private static final String RDF_PREFIX = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+  public static final String GEO_PREFIX = "http://www.w3.org/2003/01/geo/wgs84_pos#";
 
   private static final String RDF_TYPE = RDF_PREFIX + "type";
 
   private static final String WON_NEED = WON_PREFIX + "Need";
   private static final String WON_HAS_CONNECTIONS = WON_PREFIX + "hasConnections";
-  private static final String WON_HAS_CONTENT = WON_PREFIX + "hasContent";
-
-  private static final String DC_TITLE = DC_PREFIX + "title";
   private static final String WON_TEXT_DESCRIPTION = WON_PREFIX + "hasTextDescription";
   private static final String WON_BASIC_NEED_TYPE = WON_PREFIX + "hasBasicNeedType";
-
   private static final String WON_BELONGS_TO_NEED = "http://purl.org/webofneeds/model#belongsToNeed";
 
+  private static final String DC_TITLE = DC_PREFIX + "title";
+
+  private static final String GEO_LONGITUDE = GEO_PREFIX + "longitude";
+  private static final String GEO_LATITUDE = GEO_PREFIX + "latitude";
 
   public SirenSink(String serverURI)
   {
@@ -120,7 +121,8 @@ public class SirenSink implements Sink
     private String title = null;
     private String description = null;
     private String basicNeedType = null;
-
+    private String latitude = null;
+    private String longitude = null;
 
     private SirenCallback(Provenance provenance, CommonsHttpSolrServer server)
     {
@@ -190,6 +192,12 @@ public class SirenSink implements Sink
       if (basicNeedType == null && nodes[1].toString().equals(WON_BASIC_NEED_TYPE))
         basicNeedType = nodes[2].toString();
 
+      if (latitude == null && nodes[1].toString().equals(GEO_LATITUDE))
+        latitude = nodes[2].toString();
+
+      if (longitude == null && nodes[1].toString().equals(GEO_LONGITUDE))
+        longitude = nodes[2].toString();
+
       nTriplesBuilder.append(nodes[0].toN3() + " " + nodes[1].toN3() + " " + nodes[2].toN3() + " .\n");
     }
 
@@ -215,6 +223,9 @@ public class SirenSink implements Sink
 
       if (basicNeedType != null)
         document.setField(FIELD_BASIC_NEED_TYPE, basicNeedType);
+
+      if (latitude != null && longitude != null)
+        document.addField(FIELD_LOCATION, latitude + "," + longitude);
 
       writeToSiren();
     }
