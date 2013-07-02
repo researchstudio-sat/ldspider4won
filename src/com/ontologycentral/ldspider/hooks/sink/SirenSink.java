@@ -24,6 +24,7 @@ import org.semanticweb.yars.nx.parser.Callback;
 
 import java.net.MalformedURLException;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -42,10 +43,13 @@ public class SirenSink implements Sink
   private static final String FIELD_DESCRIPTION = "description";
   private static final String FIELD_BASIC_NEED_TYPE = "basicNeedType";
   private static final String FIELD_LOCATION = "location";
+  private static final String FIELD_LOWERPRICE = "lowerPriceLimit";
+  private static final String FIELD_UPPERPRICE = "upperPriceLimit";
+  private static final String FIELD_STARTTIME = "startTime";
+  private static final String FIELD_ENDTIME = "endTime";
 
+  private static final String FIELD_TAG = "tag";
 
-  //hack: thanks to httprange-14, we have to determine the resource url by
-  // searching for triples X won:hasConnections Y. So we have to define this constant here
   //TODO: the URI here may change in the future, which may break the siren/sink code
   private static final String WON_PREFIX = "http://purl.org/webofneeds/model#";
   private static final String DC_PREFIX = "http://purl.org/dc/elements/1.1/";
@@ -58,7 +62,11 @@ public class SirenSink implements Sink
   private static final String WON_HAS_CONNECTIONS = WON_PREFIX + "hasConnections";
   private static final String WON_TEXT_DESCRIPTION = WON_PREFIX + "hasTextDescription";
   private static final String WON_BASIC_NEED_TYPE = WON_PREFIX + "hasBasicNeedType";
-  private static final String WON_BELONGS_TO_NEED = "http://purl.org/webofneeds/model#belongsToNeed";
+  private static final String WON_HAS_TAG = WON_PREFIX + "hasTag";
+  private static final String WON_HAS_LOWER_PRICE_LIMIT = WON_PREFIX + "hasLowerPriceLimit";
+  private static final String WON_HAS_UPPER_PRICE_LIMIT = WON_PREFIX + "hasUpperPriceLimit";
+  private static final String WON_HAS_START_TIME = WON_PREFIX + "hasStartTime";
+  private static final String WON_HAS_END_TIME = WON_PREFIX + "hasEndTime";
 
   private static final String DC_TITLE = DC_PREFIX + "title";
 
@@ -103,26 +111,31 @@ public class SirenSink implements Sink
   /**
    * Do nothing
    *
-   * @author aharth
+   * @author Florian Kleedorfer & Alan Tus
    */
   private static class SirenCallback implements Callback
   {
-    private final Logger _log = Logger.getLogger(this.getClass().getSimpleName());
+    private final Logger _log = Logger.getLogger(this.getClass().getName());
 
     private Provenance provenance;
-    private SolrInputDocument document = null;
     private CommonsHttpSolrServer solrServer;
 
-    private StringBuilder nTriplesBuilder = null;
+    private SolrInputDocument document = null;
     private String documentUrl = null;
+
+    private StringBuilder nTriplesBuilder = null;
 
     private boolean isNeed = false;
 
     private String title = null;
     private String description = null;
     private String basicNeedType = null;
-    private String latitude = null;
-    private String longitude = null;
+    private float latitude = 0;
+    private float longitude = 0;
+    private double priceLower = -1;
+    private double priceUpper = -1;
+    private Date startTime = null;
+    private Date endTime = null;
 
     private SirenCallback(Provenance provenance, CommonsHttpSolrServer server)
     {
@@ -135,12 +148,12 @@ public class SirenSink implements Sink
     {
       _log.info("starting to collect statements of document for siren/solr server, doc url is " + this.provenance.getUri().toString());
       this.document = new SolrInputDocument();
-      this.document.addField(FIELD_URL, "");
-      this.document.addField(FIELD_NTRIPLE, "");
-
-      this.document.addField(FIELD_TITLE, "");
-      this.document.addField(FIELD_DESCRIPTION, "");
-      this.document.addField(FIELD_BASIC_NEED_TYPE, "");
+//      this.document.addField(FIELD_URL, "");
+//      this.document.addField(FIELD_NTRIPLE, "");
+//
+//      this.document.addField(FIELD_TITLE, "");
+//      this.document.addField(FIELD_DESCRIPTION, "");
+//      this.document.addField(FIELD_BASIC_NEED_TYPE, "");
 
       this.nTriplesBuilder = new StringBuilder();
       this.documentUrl = null;
@@ -192,11 +205,22 @@ public class SirenSink implements Sink
       if (basicNeedType == null && nodes[1].toString().equals(WON_BASIC_NEED_TYPE))
         basicNeedType = nodes[2].toString();
 
-      if (latitude == null && nodes[1].toString().equals(GEO_LATITUDE))
-        latitude = nodes[2].toString();
+      try {
+        if (nodes[1].toString().equals(GEO_LATITUDE))
+          latitude = Float.parseFloat(nodes[2].toString());
+        if (nodes[1].toString().equals(GEO_LONGITUDE))
+          longitude = Float.parseFloat(nodes[2].toString());
 
-      if (longitude == null && nodes[1].toString().equals(GEO_LONGITUDE))
-        longitude = nodes[2].toString();
+        if (nodes[1].toString().equals(WON_HAS_LOWER_PRICE_LIMIT))
+          priceLower = Float.parseFloat(nodes[2].toString());
+        if (nodes[1].toString().equals(WON_HAS_UPPER_PRICE_LIMIT))
+          priceUpper = Float.parseFloat(nodes[2].toString());
+
+      } catch (NumberFormatException e) {
+        _log.log(Level.WARNING, "Error parsing numbers.", e);
+      }
+      if (nodes[1].toString().equals(WON_HAS_TAG))
+        document.addField(FIELD_TAG, nodes[2].toString());
 
       nTriplesBuilder.append(nodes[0].toN3() + " " + nodes[1].toN3() + " " + nodes[2].toN3() + " .\n");
     }
@@ -205,7 +229,7 @@ public class SirenSink implements Sink
     public void endDocument()
     {
       if (!isNeed) {
-        _log.info("Not a Need graph, skipping.");
+        _log.fine("Not a Need graph, skipping.");
         return;
       }
 
@@ -213,19 +237,31 @@ public class SirenSink implements Sink
         _log.warning("Could not determine document url by analyzing triples. Using " + this.provenance.getUri() + " as a fallback. This may cause problems.");
         this.documentUrl = this.provenance.getUri().toString();
       }
-      this.document.setField(FIELD_URL, this.documentUrl);
+      this.document.addField(FIELD_URL, this.documentUrl);
 
       if (title != null)
-        document.setField(FIELD_TITLE, title);
+        document.addField(FIELD_TITLE, title);
 
       if (description != null)
-        document.setField(FIELD_DESCRIPTION, description);
+        document.addField(FIELD_DESCRIPTION, description);
 
       if (basicNeedType != null)
-        document.setField(FIELD_BASIC_NEED_TYPE, basicNeedType);
+        document.addField(FIELD_BASIC_NEED_TYPE, basicNeedType);
 
-      if (latitude != null && longitude != null)
+      if (latitude > 0 && longitude > 0)
         document.addField(FIELD_LOCATION, latitude + "," + longitude);
+
+      if (priceLower > -1)
+        document.addField(FIELD_LOWERPRICE, priceLower);
+
+      if (priceUpper > -1)
+        document.addField(FIELD_UPPERPRICE, priceUpper);
+
+      String nTriplesString = nTriplesBuilder.toString();
+
+      if (nTriplesString.length() == 0) return;
+      _log.fine("writing these triples: \n" + nTriplesString);
+      this.document.addField(FIELD_NTRIPLE, nTriplesString);
 
       writeToSiren();
     }
@@ -234,38 +270,9 @@ public class SirenSink implements Sink
     {
       _log.info("writing document to siren/solr server, doc url is " + this.provenance.getUri().toString() + ", using resource url " + this.documentUrl);
       try {
-        String nTriplesString = nTriplesBuilder.toString();
-
-        //reject anything without the triples
-        if (nTriplesString.length() == 0) return;
-        _log.fine("writing these triples: \n" + nTriplesString);
-        this.document.setField(FIELD_NTRIPLE, nTriplesString);
-
         final UpdateRequest request = new UpdateRequest();
         request.add(this.document);
         request.process(this.solrServer);
-
-        //TODO: find out how to fix this
-        //Thread.sleep(1500); //the timing code in LoadBalancingQueue makes this necessary for hosts without tld in the LAN.
-        //with breadth-first ("-b") it seems to work, though.
-
-        /*
-        SolrQuery params = new SolrQuery();
-        params.set("mlt", "true");
-        params.set(MoreLikeThisParams.MIN_DOC_FREQ,1);
-        params.set(MoreLikeThisParams.MIN_TERM_FREQ,1);
-        params.set(MoreLikeThisParams.SIMILARITY_FIELDS,FIELD_NTRIPLE);
-        params.setQueryType("siren");
-        params.set("q", "id:" + this.provenance.getUri().toString());
-
-        QueryResponse response = this.solrServer.query(params);
-        SolrDocumentList results = response.getResults();
-        _log.info("results for mlt query: " + results.size() + " documents");
-        for( SolrDocument result : results) {
-            _log.info("got result: " + result.getFirstValue("id"));
-        }*/
-
-
       } catch (Exception e) {
         _log.log(Level.WARNING, "An error occurred when writing to solr server at " + solrServer.getBaseURL(), e);
       }
