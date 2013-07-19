@@ -27,15 +27,18 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SirenSink implements Sink
 {
 
-  private final Logger _log = Logger.getLogger(this.getClass().getSimpleName());
+  private final Logger logger = Logger.getLogger(this.getClass().getSimpleName());
 
   private static final String DEFAULT_SOLR_SERVER_URL = "http://sat001:8080/siren";
   private CommonsHttpSolrServer solrServer = null;
 
+  //FIELDS! they have to be the same as in the won-core/SolrFields class
   private static final String FIELD_URL = "url";
   private static final String FIELD_NTRIPLE = "ntriple";
 
@@ -75,11 +78,11 @@ public class SirenSink implements Sink
 
   public SirenSink(String serverURI)
   {
-    _log.info("connecting to solr server at " + serverURI);
+    logger.info("connecting to solr server at " + serverURI);
     try {
       this.solrServer = new CommonsHttpSolrServer(serverURI != null ? serverURI : DEFAULT_SOLR_SERVER_URL);
     } catch (MalformedURLException e) {
-      _log.log(Level.WARNING, "could not create http solr client", e);
+      logger.log(Level.WARNING, "could not create http solr client", e);
     }
   }
 
@@ -88,14 +91,15 @@ public class SirenSink implements Sink
   {
     if (this.solrServer != null) {
       try {
-        _log.info("shutting down siren sink, committing siren/solr data");
+        logger.info("shutting down siren sink, committing siren/solr data");
         this.solrServer.commit();
       } catch (Exception e) {
-        _log.log(Level.WARNING, "error committing siren/solr data", e);
+        logger.log(Level.WARNING, "error committing siren/solr data", e);
       }
     }
   }
 
+  @Override
   public Callback newDataset(Provenance provenance)
   {
     return new SirenCallback(provenance, solrServer);
@@ -104,8 +108,8 @@ public class SirenSink implements Sink
   public void close()
   {
     if (this.solrServer == null) return;
-    _log.info("shutting down siren solr connection..");
-    _log.info("siren sink closed.");
+    logger.info("shutting down siren solr connection..");
+    logger.info("siren sink closed.");
   }
 
   /**
@@ -115,7 +119,7 @@ public class SirenSink implements Sink
    */
   private static class SirenCallback implements Callback
   {
-    private final Logger _log = Logger.getLogger(this.getClass().getName());
+    private final Logger logger = Logger.getLogger(this.getClass().getName());
 
     private Provenance provenance;
     private CommonsHttpSolrServer solrServer;
@@ -124,6 +128,9 @@ public class SirenSink implements Sink
     private String documentUrl = null;
 
     private StringBuilder nTriplesBuilder = null;
+
+    private final String TAG_PATTERN_STRING = "#\\w+";
+    private Pattern tagPattern;
 
     private boolean isNeed = false;
 
@@ -141,32 +148,26 @@ public class SirenSink implements Sink
     {
       this.provenance = provenance;
       this.solrServer = server;
+      this.tagPattern = Pattern.compile(TAG_PATTERN_STRING);
     }
 
     @Override
     public void startDocument()
     {
-      _log.info("starting to collect statements of document for siren/solr server, doc url is " + this.provenance.getUri().toString());
-      this.document = new SolrInputDocument();
-//      this.document.addField(FIELD_URL, "");
-//      this.document.addField(FIELD_NTRIPLE, "");
-//
-//      this.document.addField(FIELD_TITLE, "");
-//      this.document.addField(FIELD_DESCRIPTION, "");
-//      this.document.addField(FIELD_BASIC_NEED_TYPE, "");
+      logger.info("starting to collect statements of document for siren/solr server, doc url is " + this.provenance.getUri().toString());
 
+      this.document = new SolrInputDocument();
       this.nTriplesBuilder = new StringBuilder();
-      this.documentUrl = null;
     }
 
     @Override
     public void processStatement(Node[] nx)
     {
-      //_log.info("collecting statements for siren/solr, doc url is " + this.provenance.getUri().toString() + ", data: " + Arrays.toString(nx));
+      //logger.info("collecting statements for siren/solr, doc url is " + this.provenance.getUri().toString() + ", data: " + Arrays.toString(nx));
       try {
         writeStatement(nx);
       } catch (Exception e) {
-        _log.log(Level.WARNING, "error processing triple '" + Arrays.toString(nx) + "'.", e);
+        logger.log(Level.WARNING, "error processing triple '" + Arrays.toString(nx) + "'.", e);
       }
     }
 
@@ -190,17 +191,21 @@ public class SirenSink implements Sink
       //hack:
       if (this.documentUrl == null && WON_HAS_CONNECTIONS.equals(nodes[1].toString())) {
         this.documentUrl = nodes[0].toString();
-        _log.info("using this as document url: " + this.documentUrl);
+        logger.info("using this as document url: " + this.documentUrl);
       }
 
       if (nodes[1].toString().equals(RDF_TYPE) && nodes[2].toString().equals(WON_NEED))
         isNeed = true;
 
-      if (title == null && nodes[1].toString().equals(DC_TITLE))
+      if (title == null && nodes[1].toString().equals(DC_TITLE)) {
         title = nodes[2].toString();
+        parseTags(title);
+      }
 
-      if (description == null && nodes[1].toString().equals(WON_TEXT_DESCRIPTION))
+      if (description == null && nodes[1].toString().equals(WON_TEXT_DESCRIPTION)) {
         description = nodes[2].toString();
+        parseTags(description);
+      }
 
       if (basicNeedType == null && nodes[1].toString().equals(WON_BASIC_NEED_TYPE))
         basicNeedType = nodes[2].toString();
@@ -217,24 +222,33 @@ public class SirenSink implements Sink
           priceUpper = Float.parseFloat(nodes[2].toString());
 
       } catch (NumberFormatException e) {
-        _log.log(Level.WARNING, "Error parsing numbers.", e);
+        logger.log(Level.WARNING, "Error parsing numbers.", e);
       }
+
       if (nodes[1].toString().equals(WON_HAS_TAG))
         document.addField(FIELD_TAG, nodes[2].toString());
 
-      nTriplesBuilder.append(nodes[0].toN3() + " " + nodes[1].toN3() + " " + nodes[2].toN3() + " .\n");
+      nTriplesBuilder.append(String.format("%s %s %s .\n", nodes[0].toN3(), nodes[1].toN3(), nodes[2].toN3()));
+    }
+
+    public void parseTags(String text)
+    {
+      Matcher m = tagPattern.matcher(text);
+
+      while (m.find())
+        document.addField(FIELD_TAG, m.group());
     }
 
     @Override
     public void endDocument()
     {
       if (!isNeed) {
-        _log.fine("Not a Need graph, skipping.");
+        logger.fine("Not a Need graph, skipping.");
         return;
       }
 
       if (this.documentUrl == null) {
-        _log.warning("Could not determine document url by analyzing triples. Using " + this.provenance.getUri() + " as a fallback. This may cause problems.");
+        logger.warning("Could not determine document url by analyzing triples. Using " + this.provenance.getUri() + " as a fallback. This may cause problems.");
         this.documentUrl = this.provenance.getUri().toString();
       }
       this.document.addField(FIELD_URL, this.documentUrl);
@@ -260,21 +274,16 @@ public class SirenSink implements Sink
       String nTriplesString = nTriplesBuilder.toString();
 
       if (nTriplesString.length() == 0) return;
-      _log.fine("writing these triples: \n" + nTriplesString);
+      logger.fine("writing these triples: \n" + nTriplesString);
       this.document.addField(FIELD_NTRIPLE, nTriplesString);
 
-      writeToSiren();
-    }
-
-    private void writeToSiren()
-    {
-      _log.info("writing document to siren/solr server, doc url is " + this.provenance.getUri().toString() + ", using resource url " + this.documentUrl);
+      logger.info("writing document to siren/solr server, doc url is " + this.provenance.getUri().toString() + ", using resource url " + this.documentUrl);
       try {
         final UpdateRequest request = new UpdateRequest();
         request.add(this.document);
         request.process(this.solrServer);
       } catch (Exception e) {
-        _log.log(Level.WARNING, "An error occurred when writing to solr server at " + solrServer.getBaseURL(), e);
+        logger.log(Level.WARNING, "An error occurred when writing to solr server at " + solrServer.getBaseURL(), e);
       }
     }
   }
