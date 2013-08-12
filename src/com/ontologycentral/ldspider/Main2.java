@@ -646,7 +646,9 @@ public class Main2 {
       Iterator<URI> expiredURIs = crawlStateManager.getExpiredUriIterator();
       int expiredUriCnt = 0;
       while(expiredURIs.hasNext()){
-        frontier.add(expiredURIs.next());
+        URI uri = expiredURIs.next();
+        _log.info("adding expired uri " + uri);
+        frontier.add(uri);
         expiredUriCnt++;
       }
       _log.info("added " + expiredUriCnt + " expired URIs to the frontier");

@@ -47,6 +47,24 @@ public class CrawlStateManagerImpl implements CrawlStateManager {
         this.neverExpiresDate = cal.getTime();
     }
 
+    public void logCrawlState(){
+        Date currentDate = new Date();
+        _log.info("-- START logging crawl state --");
+        _log.info("            using data folder: " + dataFolder);
+        _log.info("date used for 'never expires': " + neverExpiresDate);
+        _log.info("                  initialized: " + initialized);
+        _log.info("                 current date: " + currentDate);
+        _log.info(" URI expiry dates:");
+        Iterator<Map.Entry<URI, Date>> expiryDates = this.uriExpiryDateMap.entrySet().iterator();
+        while (expiryDates.hasNext()){
+            Map.Entry<URI,Date> expiryDate = expiryDates.next();
+            String expiredStr = expiryDate.getValue().before(currentDate)? "expired":"not expired";
+            _log.info(expiredStr + ": " + expiryDate.getKey() + " (" + expiryDate.getValue() + ")");
+        }
+        _log.info("--  END  logging crawl state --");
+    }
+
+
     @Override
     public void registerExpiryDate(URI resourceUri, Date expiryDate) {
         synchronized (this){

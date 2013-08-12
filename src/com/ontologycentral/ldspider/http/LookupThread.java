@@ -47,7 +47,7 @@ public class LookupThread extends Thread {
 
 	static AtomicInteger _overall200FetchesWithRDF = new AtomicInteger(0);
 	static AtomicInteger _overall200Fetches = new AtomicInteger(0);
-    static String _RFC1123_PATTERN = "EEE, dd MMM yyyyy HH:mm:ss z";
+    static String _RFC1123_PATTERN = "EEE, dd MMM yyyy HH:mm:ss z";
 
 
 
